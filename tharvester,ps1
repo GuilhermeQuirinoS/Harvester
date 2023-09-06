@@ -1,0 +1,703 @@
+[cmdletbinding()]
+param( 
+    [String]$o
+)
+
+
+$banner = @"
+
+_________         ___   ___   ________   ______    __   __   ______   ______   _________  ______   ______       
+/________/\       /__/\ /__/\ /_______/\ /_____/\  /_/\ /_/\ /_____/\ /_____/\ /________/\/_____/\ /_____/\      
+\__.::.__\/_______\::\ \\  \ \\::: _  \ \\:::_ \ \ \:\ \\ \ \\::::_\/_\::::_\/_\__.::.__\/\::::_\/_\:::_ \ \     
+   \::\ \ /______/\\::\/_\ .\ \\::(_)  \ \\:(_) ) )_\:\ \\ \ \\:\/___/\\:\/___/\  \::\ \   \:\/___/\\:(_) ) )_   
+    \::\ \\__::::\/ \:: ___::\ \\:: __  \ \\: __ `\ \\:\_/.:\ \\::___\/_\_::._\:\  \::\ \   \::___\/_\: __ `\ \  
+     \::\ \          \: \ \\::\ \\:.\ \  \ \\ \ `\ \ \\ ..::/ / \:\____/\ /____\:\  \::\ \   \:\____/\\ \ `\ \ \ 
+      \__\/           \__\/ \::\/ \__\/\__\/ \_\/ \_\/ \___/_(   \_____\/ \_____\/   \__\/    \_____\/ \_\/ \_\/ 
+                                                                                                                 
+
+                                                                                                   
+$MyVersion
+"@
+Write-Host $banner -NoNewline -ForegroundColor white
+   
+function CreateOutput {
+    ########################################
+    #           Creating output Files      # 
+    ########################################
+    param (
+        [string[]]$VariableNames
+    )
+    $outputDirectory = "C:\Temp\T_Harvester\Output"
+    New-Item -Path $outputDirectory -ItemType Directory -Force
+
+    foreach ($variableName in $VariableNames) {
+        $variableValue = Get-Variable -Name $variableName -ValueOnly
+
+        if ($variableValue -ne $null) {
+            $jsonOutputPath = Join-Path -Path $outputDirectory -ChildPath "$variableName.json"
+
+            $variableValue | ConvertTo-Json | Out-File -FilePath $jsonOutputPath
+        }else{
+            $variableName | Out-File -Append -FilePath "C:\T_Harvester\Output\"
+        }
+    }
+    
+    Write-Host -Fore Cyan "[!] Output files created."
+}
+
+function Usage {
+    ##################################################
+    #              Help Instructions                 #
+    ##################################################
+    Write-Host ''
+    Write-Host -Fore Cyan   'T-Harvester Information'
+    Write-Host -Fore DarkCyan   '[*] .\tharvester.ps1 -o all - harvest all system informations.'
+	Write-Host ''
+	Write-Host -Fore DarkCyan   ''
+	Write-Host -Fore Cyan   ''
+
+}
+
+function Information {
+    ##################################################
+    #               What T-Harvest Grabs             #
+    ##################################################
+
+    Write-Host -Fore DarkCyan '
+    =================================
+      USER AND ACCOUNT INFORMATION
+    =================================
+      1. GETS CURRENT USER.
+      2. SYSTEM DETAILS.
+      3. USER ACCOUNTS
+      4. LOGON SESSIONS
+      5. USER PROFILES
+      6. ADMINISTRATOR ACCOUNTS
+      7. LOCAL GROUPS
+ 
+    =================================
+      SYSTEM INFORMATION
+    =================================
+      1. INSTALLED PROGRAMS.
+      2. INSTALLED PROGRAMS FROM REGISTERY.
+      3. ENVIRONMENT VARIABLES
+      4. SYSTEM INFORMATION
+      5. OPERATING SYSTEM INFORMATION
+      6. HOTFIXES
+      8. WINDOWS DEFENDER STATUS AND DETAILS
+ 
+    =================================
+      NETWORK INFORMATION
+    =================================
+      1. NETWORK ADAPTER INFORMATION.
+      2. CURRENT IP CONFIGURATION IPV6 IPV4.
+      3. CURRENT CONNECTION PROFILES.
+      4. ASSOCIATED WIFI NETWORKS AND PASSWORDS.
+      5. ARP CACHES
+      6. CURRENT TCP CONNECTIONS AND ASSOCIATED PROCESSES
+      7. DNS CACHE
+      8. CURRENT FIREWALL RULES
+      9. ACTIVE SMB SESSIONS (IF ITS A SERVER)
+      10. ACTIVE SMB SHARES
+      11. IP ROUTES TO NON LOCAL DESTINATIONS
+      12. NETWORK ADAPTERS WITH IP ROUTES TO NON LOCAL DESTINATIONS
+      13. IP ROUTES WITH INFINITE VALID LIFETIME
+ 
+    ========================================
+      PROCESSES | SCHEDULED TASK | REGISTRY
+    ========================================
+     1. PROCESSES.
+     2. STARTUP PROGRAMS
+     3. SCHEDULED TASK
+     4. SCHEDULED TASKS AND STATE
+     5. SERVICES
+     6. PERSISTANCE IN REGISTRY
+     
+    ========================================
+      EVENTLOG ANALYSIS
+    ========================================
+     1. USER RELATED ACTIVITES.
+        1. RDP LOGINS
+        2. ENUMERATED A USER GROUP MEMBERSHIP
+        3. CREATED USERS
+        4. PASSWORD RESETS
+        5. ADDED USERS TO GROUP
+        6. ENABLED USERS
+        7. DISABLED USERS
+        8. DELETED USERS
+        9. ACCOUNT LOCKOUTS
+        10. CREDENTIAL MANAGER BACKUPS
+        11. CREDNTIAL MANAGER RESTORES
+        12. LOGON EVENTS
+        13. OBJECT ACCESS
+        14. PROCESS EXECUTION
+        15. SUSPICIOUS ACTIVITIES
+ 
+    =================================
+      OTHER CHECKS
+    =================================
+     1.  LOGICAL DRIVES
+     2.  CONNECTED AND DISCONNECTED WEBCAMS
+     3.  USB DEVICES
+     4.  UPNP DEVICES
+     5.  ALL PREVIOUSLY CONNECTED DRIVES
+     6.  ALL FILES CREATED IN THE LAST 180 DAYS
+     7.  500 DAYS WORTH OF POWERSHELL HISTORY
+     9.  EXECUTABLES IN DOWNLOADS FOLDER
+     10. EXECUTABLES IN APPDATA
+     11. EXECUATBLES IN TEMP
+     12. EXECUTABLES IN PERFLOGS
+     13. EXECUTABLES IN THE DOCUMENTS FOLDER
+ 
+    =========================================
+       ORTHER REPORTS IN THE HTML INDEX FILE
+    =========================================
+     1.  GROUP POLICY REPORT
+     2.  WINPMEM RAM CAPTURE
+     3.  LOG4J
+     4.  IIS LOGS
+     5.  TOMCAT LOGS
+     6.  BROWSING HISTORY OF ALL USERS 
+     7.  CHECK FOR FILES THAT HAS SIMILAR EXTENSIONS WITH KNOWN RANSOMWARE ENCRYPTED FILES
+         NOTE: THIS CHECK CAN TAKE SOME TIME TO COMPLETE DEPENDING ON THE NUMBER OF DRIVES AND AMOUNT OF FILES.
+     8.  RUNS NETWORK TRACING USING NETSH TRACE & CONVERTS TO PCAPNG FOR FURTHER ANALYSIS
+     9.  Event Logs in EVTX Format
+     
+     '
+}
+
+function InstalledPrograms() {
+    ##################################################
+    #              Installed Programs                #
+    ##################################################
+    
+    Write-Host -Fore DarkCyan "[*] Gathering Installed Programs"
+
+    $installedprogs = Get-CimInstance -ClassName win32_product | Select-Object Name, Version, Vendor, InstallDate, InstallSource, PackageName, LocalPackage
+    $installedapps = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate
+
+    CreateOutput -VariableNames "installedprogs", "installedapps"
+
+    Write-Host -Fore Cyan "[!] Done"
+    
+}
+
+function UserAccontsInfo() {
+    Write-Host -Fore DarkCyan "[*] Gathering User & Account Information"
+
+    $currentuser = Get-WMIObject -class Win32_ComputerSystem | select username 
+    $systemname = Get-WmiObject -Class Win32_ComputerSystem | select Name, DNSHostName, Domain, Manufacturer, Model, PrimaryOwnerName, TotalPhysicalMemory, Workgroup    
+    $useraccounts = Get-WmiObject -Class Win32_UserAccount  | Select-Object -Property AccountType,Domain,LocalAccount,Name,PasswordRequired,SID,SIDType 
+    $logonsession = Get-WmiObject -Class Win32_LogonSession | Select-Object -Property LogonID,LogonType,StartTime,  @{Name='Start Time';Expression={$_.ConvertToDateTime($_.starttime)}}  
+    $logonsession = query user 
+    $userprocesses = Get-Process -includeusername 
+    $userprofiles = Get-WmiObject -Class Win32_UserProfile | Select-object -property Caption, LocalPath, SID, @{Name='Last Used';Expression={$_.ConvertToDateTime($_.lastusetime)}}  
+
+    $administrators = Get-LocalGroupMember -Group "Administrators" 
+
+    $localgroup = Get-LocalGroup 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "systemname", "useraccounts", "currentuser", "logonsession", "userprocesses", "userprofiles", "administrators", "localgroup"
+}
+
+function ArtifactDecrypt {
+    # ##################################################
+    # #          ARTIFACT DECRYPTION SWITCH            #
+    # ##################################################
+
+    # if ($DECRYPT) {
+        
+    #     $DecryptPath = $PSScriptRoot + "\" + "$env:computername" + "\" 
+        
+    # if (!(gci $DecryptPath *.forensicator))  { 
+        
+    #     Write-Host -Fore DarkCyan "[!] Cannot find encrypted file, Did you relocate it?"
+    #     $TargetPath = Read-Host -Prompt 'Enter Path to the Encrypted File'
+    # }
+    # else {
+        
+    #     $TargetPath = $PSScriptRoot + "\" + "$env:computername" + "\"	
+    # }
+    
+    # # Import FileCryptography module
+    # Import-Module "$PSScriptRoot\Forensicator-Share\FileCryptography.psm1"
+    
+    # $key = Read-Host -Prompt 'Enter Decryption Key'
+    # $Extension = ".forensicator"
+    
+    # # Gather all files from the target path and its subdirectories
+    #     $FilestoDecrypt = get-childitem -path $TargetPath\* -Include *$Extension -Recurse -force | where { ! $_.PSIsContainer }
+    
+    #     # Decrypt the files
+    #     foreach ($file in $FilestoDecrypt)
+    #     {
+    #         Write-Host "Decrypting $file"
+    #         Unprotect-File $file -Algorithm AES -KeyAsPlainText $key -Suffix $Extension  -RemoveSource
+    #     }
+    #     exit 0
+    # }else{
+        
+    # }
+}
+
+function RegionSystemInfo {
+    ##################################################
+    #                  System Info                   #
+    ##################################################
+
+    Write-Host -Fore DarkCyan "[*] Gathering System Information"
+
+    #Environment Settings
+    $env = Get-ChildItem ENV: | select name, value  
+
+    #System Info
+    $systeminfo = Get-WmiObject -Class Win32_ComputerSystem  | Select-Object -Property Name,Caption,SystemType,Manufacturer,Model,DNSHostName,Domain,PartOfDomain,WorkGroup,CurrentTimeZone,PCSystemType,HyperVisorPresent  
+
+    #OS Info
+    $osinfo = Get-WmiObject -Class Win32_OperatingSystem   | Select-Object -Property Name, Description,Version,BuildNumber,InstallDate,SystemDrive,SystemDevice,WindowsDirectory,LastBootupTime,Locale,LocalDateTime,NumberofUsers,RegisteredUser,Organization,OSProductSuite 
+
+    #Hotfixes
+    $hotfixes = Get-Hotfix | Select-Object -Property CSName, Caption,Description, HotfixID, InstalledBy, InstalledOn  
+
+    #Get Windows Defender Status
+    $windefender = Get-MpComputerStatus 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "env", "systeminfo", "osinfo", "hotfixes", "windefender"
+}
+
+function ProcessesAndSchTasks {
+    ##################################################
+    #     Live Running Processes & Scheduled Tasks   #
+    ##################################################  
+
+    Write-Host -Fore DarkCyan "[*] Gathering Processes and Tasks"
+    $processes = Get-Process | Select Handles, StartTime, PM, VM, SI, id, ProcessName, Path, Product, FileVersion  
+    #Items set to run on startup
+
+    $startupprogs = Get-WmiObject Win32_StartupCommand | select Command, User, Caption  
+
+    # Scheduled Tasks
+    $scheduledtask = Get-ScheduledTask | ? State -eq running 
+
+    # Get Running Tasks and Their state
+    $scheduledtask2 = Get-ScheduledTask | ? State -eq running | Get-ScheduledTaskInfo  
+
+    #Services
+    $services = Get-Service | Select-Object Name, DisplayName, Status, StartType  
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "processes", "startupprogs", "scheduledtask", "scheduledtask2", "services"
+}
+
+function RegistrySettings {
+    ##################################################
+    #          Settings from the Registry		     #
+    ##################################################
+    Write-Host -Fore DarkCyan "[*] Checking Registry for persistance"
+    $regrun = Get-ItemProperty -Path HKLM:\Software\Microsoft\Windows\CurrentVersion\Run  
+    $regrunonce = Get-ItemProperty -Path HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce  
+    $regrunonceex = Get-ItemProperty -Path HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnceEx  
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "regrun", "regrunonce", "regrunonceex" 
+}
+function OtherInformations {
+    ##################################################
+    #           Checking other worthwhiles	         #
+    ##################################################
+    Write-Host -Fore DarkCyan "[*] Running Peripheral Checks..."
+
+    #Logical drives (current session)
+    $logicaldrives = Get-WmiObject win32_logicaldisk | select DeviceID, DriveType, FreeSpace, Size, VolumeName 
+
+    #Gets list of USB devices
+    $usbdevices = Get-ItemProperty -Path HKLM:\System\CurrentControlSet\Enum\USB*\*\* | select FriendlyName, Driver, mfg, DeviceDesc   
+
+    #Identifies any connected/previously connected webcams
+    #$Imagedevice = Get-PnpDevice  -class 'image' -EA SilentlyContinue |  ConvertTo-Html -Fragment
+    $imagedevice = Get-WmiObject Win32_PnPEntity | where {$_.caption -match 'camera'} -EA SilentlyContinue | where caption -match 'camera' 
+
+    #All currently connected PNP devices
+    $upnpdevices = Get-PnpDevice -PresentOnly -class 'USB', 'DiskDrive', 'Mouse', 'Keyboard', 'Net', 'Image', 'Media', 'Monitor' 
+
+    #All previously connected disk drives not currently accounted for. Useful if target computer has had drive replaced/hidden
+    $unknowndrives = Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR\*\* | Select FriendlyName 
+
+    #Gets all link files created in last 180 days. Perhaps export this as a separate CSV and make it keyword searchable?
+    $linkfiles = Get-WmiObject Win32_ShortcutFile | select Filename, Caption, @{NAME='CreationDate';Expression={$_.ConvertToDateTime($_.CreationDate)}}, @{Name='LastAccessed';Expression={$_.ConvertToDateTime($_.LastAccessed)}}, @{Name='LastModified';Expression={$_.ConvertToDateTime($_.LastModified)}}, Target | Where-Object {$_.LastModified -gt ((Get-Date).AddDays(-180)) } | sort LastModified -Descending  
+
+    #Gets last 100 days worth of Powershell History
+    $pshistory = Get-History -count 500 | select id, commandline, startexecutiontime, endexecutiontime 
+
+    #All items in Downloads folder. This may cause an error if the script is run from an external USB or Network drive, even when
+    $downloads = Get-ChildItem C:\Users\*\Downloads\* -recurse  |  select  PSChildName, Root, Name, FullName, Extension, CreationTimeUTC, LastAccessTimeUTC, LastWriteTimeUTC, Attributes | where {$_.extension -eq '.exe'} 
+
+    #Executables Running From Obscure Places
+    $hiddenexecs1 = Get-ChildItem C:\Users\*\AppData\Local\Temp\* -recurse  |  select  PSChildName, Root, Name, FullName, Extension, CreationTimeUTC, LastAccessTimeUTC, LastWriteTimeUTC, Attributes | where {$_.extension -eq '.exe'} 
+
+    $hiddenexecs2 = Get-ChildItem C:\Temp\* -recurse  |  select  PSChildName, Root, Name, FullName, Extension, CreationTimeUTC, LastAccessTimeUTC, LastWriteTimeUTC, Attributes | where {$_.extension -eq '.exe'} 
+
+    $hiddenexecs3 = Get-ChildItem C:\PerfLogs\* -recurse  |  select  PSChildName, Root, Name, FullName, Extension, CreationTimeUTC, LastAccessTimeUTC, LastWriteTimeUTC, Attributes | where {$_.extension -eq '.exe'} 
+
+    $hiddenexecs4 = Get-ChildItem C:\Users\*\Documents\* -recurse  |  select  PSChildName, Root, Name, FullName, Extension, CreationTimeUTC, LastAccessTimeUTC, LastWriteTimeUTC, Attributes | where {$_.extension -eq '.exe'} 
+
+    CreateOutput -VariableNames "usbdevices","imagedevice","logicaldrives","upnpdevices","unknowndrives","linkfiles","pshistory","downloads","hiddenexecs1","hiddenexecs2","hiddenexecs3","hiddenexecs4"
+}
+
+function UserCheckList {
+    ##### USER RELATED CHECKS ##########
+
+    ##################################################
+    ###      Enumerated a User's Group Membership  ###
+    ##################################################
+
+    Write-Host -Fore DarkCyan "[*] Checking Enumerated Users"
+
+    $GroupMembershipID = @(
+    '4798'
+
+    )
+    $GroupMembershipFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$GroupMembershipID }
+    $GroupMembership = Get-WinEvent -FilterHashtable $GroupMembershipFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $GroupMembershipEventXml = ([xml]$_.ToXml()).Event
+        $GroupMembershipEnumAccount = ($GroupMembershipEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        $GroupMembershipPerformedBy = ($GroupMembershipEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $GroupMembershipPerformedLogon = ($GroupMembershipEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectLogonId' }).'#text'
+        $GroupMembershipPerformedPID = ($GroupMembershipEventXml.EventData.Data | Where-Object { $_.Name -eq 'CallerProcessId' }).'#text'
+        $GroupMembershipPerformedPName = ($GroupMembershipEventXml.EventData.Data | Where-Object { $_.Name -eq 'CallerProcessName' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$GroupMembershipEventXml.System.TimeCreated.SystemTime
+            PerformedOn = $GroupMembershipEnumAccount
+            PerformedBy = $GroupMembershipPerformedBy
+            LogonType = $GroupMembershipPerformedLogon
+            PID = $GroupMembershipPerformedPID
+            ProcessName = $GroupMembershipPerformedPName
+        }
+    } 
+    Write-Host -Fore Cyan "[!] Done"
+    CreateOutput -VariableNames "GroupMembership"
+}
+
+function RDPLogins{
+    ###########################################
+    ###          RDP Logins               #####
+    ###########################################
+
+    Write-Host -Fore DarkCyan "[*] Fetching RDP Logons"
+
+    $RDPGroupID = @(
+    '4624'
+    )
+
+    $RDPFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$RDPGroupID } 
+    $RDPLogins = Get-WinEvent -FilterHashtable $RDPFilter | where {$_.properties[8].value -eq 10} | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $RDPEventXml = ([xml]$_.ToXml()).Event
+        $RDPLogonUser = ($RDPEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        $RDPLogonUserDomain = ($RDPEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetDomainName' }).'#text'
+        $RDPLogonIP = ($RDPEventXml.EventData.Data | Where-Object { $_.Name -eq 'IpAddress' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$RDPEventXml.System.TimeCreated.SystemTime
+            LogonUser = $RDPLogonUser
+            LogonUserDomain = $RDPLogonUserDomain
+            LogonIP = $RDPLogonIP
+        }
+    } 
+    Write-Host -Fore Cyan "[!] Done"
+    CreateOutput -VariableNames "RDPLogins"
+}
+
+function CreatedUsers {
+    ######################################
+    ###        Created Users          a####
+    ######################################
+    Write-Host -Fore DarkCyan "[*] Fetching Created Users"
+    $CreatedUsersGroupID = @(
+    '4720'
+    )
+
+    $CreatedUsersFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$CreatedUsersGroupID }
+    $CreatedUsers = Get-WinEvent -FilterHashtable $CreatedUsersFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $CreatedUsersEventXml = ([xml]$_.ToXml()).Event
+        $CreatedUser = ($CreatedUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        $CreatedUsersTarget = ($CreatedUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$CreatedUsersEventXml.System.TimeCreated.SystemTime
+            CreatedUser = $CreatedUser
+            CreatedBy = $CreatedUsersTarget
+        }
+    } 
+    Write-Host -Fore Cyan "[!] Done"
+    CreateOutput -VariableNames "CreatedUsers" 
+}
+
+function PswdResets{
+    ###############################################################################
+    ### Password Resets               #############################################
+    ###############################################################################
+
+
+    Write-Host -Fore DarkCyan "[*] Checking for password resets"
+
+    $PassResetGroupID = @(
+    '4724'
+    )
+
+    $PassResetFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$PassResetGroupID }
+    $PassReset = Get-WinEvent -FilterHashtable $filter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $PassResetEventXml = ([xml]$_.ToXml()).Event
+        $PassResetTargetUser = ($PassResetEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        $PassResetActionedBy = ($PassResetEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$PassResetEventXml.System.TimeCreated.SystemTime
+            TargetUser = $PassResetTargetUser
+            ActionedBy = $PassResetActionedBy
+        }
+    } 
+    Write-Host -Fore Cyan "[!] Done"
+    CreateOutput -VariableNames "PassReset"
+}
+function AddUserToGroup {
+    #####################################
+    ###      Added users to Group     ###
+    #####################################
+
+    $AddedUsersGroupID = @(
+    '4732',
+    '4728'
+    )
+    $AddedUsersFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$AddedUsersGroupID }
+    $AddedUsers = Get-WinEvent -FilterHashtable $AddedUsersFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $AddedUsersEventXml = ([xml]$_.ToXml()).Event
+        $AddedUsersAddedBy = ($AddedUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $AddedUsersTarget = ($AddedUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'MemberSid' }).'#text'
+        #SID CONVERSION
+        $AddedUsersGobjSID = New-Object System.Security.Principal.SecurityIdentifier($AddedUsersTarget)
+        $AddedUsersGobjUser = $AddedUsersGobjSID.Translate([System.Security.Principal.NTAccount])
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$AddedUsersEventXml.System.TimeCreated.SystemTime
+            AddedBy = $AddedUsersAddedBy
+            Target = $AddedUsersGobjUser
+        }
+    } 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "AddedUsers"
+}
+
+function EnabledUsers{
+    ######################################
+    ###       Enabled Users           ####
+    ######################################
+
+    $EnabledUsersGroupID = @(
+    '4722'
+
+    )
+    $EnabledUsersFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$EnabledUsersGroupID }
+    $EnabledUsers = Get-WinEvent -FilterHashtable $EnabledUsersFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $EnabledUsersEventXml = ([xml]$_.ToXml()).Event
+        $EnabledBy = ($EnabledUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $EnabledTarget = ($EnabledUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$EnabledUsersEventXml.System.TimeCreated.SystemTime
+            EnabledBy = $EnabledBy
+            EnabledAccount = $EnabledTarget
+        }
+    } 
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "EnabledUsers"
+}
+
+function DisabledUsers{
+    ######################################
+    ### Disabled Users                ###
+    #####################################
+
+    $DisabledUsersGroupID = @(
+    '4723'
+
+    )
+    $DisabledUsersFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$DisabledUsersGroupID }
+    $DisabledUsers = Get-WinEvent -FilterHashtable $DisabledUsersFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $DisabledUsersEventXml = ([xml]$_.ToXml()).Event
+        $DisabledBy = ($DisabledUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $DisabledTarget = ($DisabledUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$DisabledUsersEventXml.System.TimeCreated.SystemTime
+            DisabledBy = $DisabledBy
+            Disabled = $DisabledTarget
+        }
+    } 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "DisabledUsers"
+}
+
+function DeletedUsers{
+    ####################################
+    ###        Deleted Users         ###
+    ####################################
+
+    $DeletedUsersGroupID = @(
+    '4726'
+
+    )
+    $DeletedUsersFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$DeletedUsersGroupID }
+    $DeletedUsers = Get-WinEvent -FilterHashtable $DeletedUsersFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $DeletedUsersEventXml = ([xml]$_.ToXml()).Event
+        $DeletedBy = ($DeletedUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $DeletedTarget = ($DeletedUsersEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$DeletedUsersEventXml.System.TimeCreated.SystemTime
+            DeletedBy = $DeletedBy
+            DeletedAccount = $DeletedTarget
+        }
+    } 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "DeletedUsers"
+}
+
+
+function AccountLockout {
+    #####################################
+    ###       Account Lockout         ###
+    #####################################
+
+    $LockOutGroupID = @(
+    '4740'
+
+    )
+    $LockOutFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$LockOutGroupID }
+    $LockOut = Get-WinEvent -FilterHashtable $LockOutFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $LockOutEventXml = ([xml]$_.ToXml()).Event
+        $LockedOutAcct = ($LockOutEventXml.EventData.Data | Where-Object { $_.Name -eq 'TargetUserName' }).'#text'
+        $System = ($LockOutEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$LockOutEventXml.System.TimeCreated.SystemTime
+            LockedOutAccount = $LockedOutAcct
+            System = $System
+        }
+    } 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "LockOut"
+}
+
+function CMB {
+    ###################################################
+    ###       Credential Manager Backup             ###
+    ###################################################
+
+    $CredManBackupGroupID = @(
+    '5376'
+
+    )
+    $CredManBackupFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$CredManBackupGroupID }
+    $CredManBackup = Get-WinEvent -FilterHashtable $CredManBackupFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $CredManBackupEventXml = ([xml]$_.ToXml()).Event
+        $CredManBackupAcct = ($CredManBackupEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $CredManBackupAcctLogon = ($CredManBackupEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectLogonId' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$CredManBackupEventXml.System.TimeCreated.SystemTime
+            BackupAccount = $CredManBackupAcct
+            AccountLogonType = $CredManBackupAcctLogon
+
+        }
+    } 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "CredManBackup"
+}
+
+
+function CMR {
+    ###############################################################################
+    ### Credential Manager Restore                  ###############################
+    ###############################################################################
+
+    $CredManRestoreGroupID = @(
+    '5377'
+
+    )
+    $CredManRestoreFilter = @{LogName='Security';ProviderName='Microsoft-Windows-Security-Auditing';ID=$CredManRestoreGroupID }
+    $CredManRestore = Get-WinEvent -FilterHashtable $CredManRestoreFilter | ForEach-Object {
+        # convert the event to XML and grab the Event node
+        $CredManRestoreEventXml = ([xml]$_.ToXml()).Event
+        $RestoredAcct = ($CredManRestoreEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectUserName' }).'#text'
+        $CredManRestoreAcctLogon = ($CredManRestoreEventXml.EventData.Data | Where-Object { $_.Name -eq 'SubjectLogonId' }).'#text'
+        # output the properties you need
+        [PSCustomObject]@{
+            Time     = [DateTime]$CredManRestoreEventXml.System.TimeCreated.SystemTime
+            RestoredAccount = $RestoredAcct
+            AccountLogonType = $CredManRestoreAcctLogon
+
+        }
+    } 
+
+    Write-Host -Fore Cyan "[!] Done"
+
+    CreateOutput -VariableNames "CredManRestore"
+}
+
+if($o -eq "/all"){
+    InstalledPrograms
+    UserAccontsInfo
+    ArtifactDecrypt
+    RegionSystemInfo
+    ProcessesAndSchTasks
+    RegistrySettings
+    OtherInformations
+    PswdResets
+    UserCheckList
+    RDPLogins
+    CreatedUsers
+    AddUserToGroup
+    EnabledUsers
+    DisabledUsers
+    DeletedUsers
+    AccountLockout
+    CMR
+    CMB
+}   
+elseif($o -eq "/info") {
+    Information
+}
+else{
+    Usage
+} 
+
+
+
